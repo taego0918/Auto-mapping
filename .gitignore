@@ -1,0 +1,33 @@
+# Unity 自動生成的快取與暫存目錄
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+/[Mm]emoryCaptures/
+
+# IDE 自動產生的專案檔 (Visual Studio / Rider / VS Code)
+/.vs/
+/.idea/
+/*.csproj
+/*.unityproj
+/*.sln
+/*.suo
+/*.tmp
+/*.user
+/*.userprefs
+/*.pidb
+/*.booproj
+/*.svd
+/*.pdb
+/*.mdb
+/*.opendb
+/*.VC.db
+
+# 作業系統暫存檔
+.DS_Store
+.DS_Store?
+ehthumbs.db
+Thumbs.db
