@@ -28,6 +28,8 @@ public class AutoBeatmapGenerator : MonoBehaviour
     public float thresholdMultiplier = 1.5f;
     [Tooltip("兩個音符之間的最小時間間隔 (秒)，防止音符疊在一起")]
     public float minNoteInterval = 0.15f;
+    [Tooltip("絕對音量保底門檻，低於此音量的靜音段落絕對不生成音符")]
+    public float minEnergyThreshold = 0.05f; // [新增] 可在 Inspector 微調，預設可給 0.01 ~ 0.05
 
     [Header("Game Play Settings")]
     public GameObject notePrefab;       // 音符的 Prefab
@@ -129,15 +131,53 @@ public class AutoBeatmapGenerator : MonoBehaviour
             return;
         }
 
-        int totalChunks = rawSamples.Length / sampleChunkSize;
+        // ==================== [新增] 低通濾波器 (Low-pass Filter) ====================
+        float sampleRate = clip.frequency;
+
+        // 計算 RC 低通濾波器的衰減係數 (Alpha)
+        float dt = 1f / sampleRate;
+        // 1. 低通濾波：切掉 250 Hz 以上 (去除人聲、吉他、高音)
+        float lowPassCutoff = 250f;
+        float lowPassRC = 1f / (2f * Mathf.PI * lowPassCutoff);
+        float alphaLow = dt / (lowPassRC + dt);
+
+        // 2. 高通濾波：切掉 60 Hz 以下 (去除極低頻嗡嗡聲、Sub-bass 殘波)
+        float highPassCutoff = 60f;
+        float highPassRC = 1f / (2f * Mathf.PI * highPassCutoff);
+        float alphaHigh = highPassRC / (highPassRC + dt);
+
+        float[] filteredSamples = new float[rawSamples.Length];
+        float lastLowPass = 0f;
+        float lastRawSample = 0f;
+        float lastHighPass = 0f;
+
+        for (int i = 0; i < rawSamples.Length; i++)
+        {
+            float currentSample = rawSamples[i];
+
+            // 先過低通
+            lastLowPass = lastLowPass + alphaLow * (currentSample - lastLowPass);
+
+            // 再過高通 (拿到最終乾淨的 60Hz~250Hz 重拍頻段)
+            float currentHighPass = alphaHigh * (lastHighPass + lastLowPass - lastRawSample);
+
+            lastRawSample = lastLowPass;
+            lastHighPass = currentHighPass;
+
+            filteredSamples[i] = currentHighPass;
+        }
+        // ============================================================================
+
+        int totalChunks = filteredSamples.Length / sampleChunkSize;
         float[] chunkEnergies = new float[totalChunks];
 
+        // 接下來全部改用濾波後的數據 (filteredSamples) 來計算能量
         for (int i = 0; i < totalChunks; i++)
         {
             float sum = 0;
             for (int j = 0; j < sampleChunkSize; j++)
             {
-                float sample = rawSamples[i * sampleChunkSize + j];
+                float sample = filteredSamples[i * sampleChunkSize + j];
                 sum += sample * sample;
             }
             chunkEnergies[i] = Mathf.Sqrt(sum / sampleChunkSize);
@@ -155,7 +195,9 @@ public class AutoBeatmapGenerator : MonoBehaviour
             }
             localAverageEnergy /= (historyWindow * 2 + 1);
 
-            if (chunkEnergies[i] > localAverageEnergy * thresholdMultiplier)
+            // [修改] 必須同時滿足：1. 倍率超過門檻  2. 絕對音量大於保底門檻
+            if (chunkEnergies[i] > localAverageEnergy * thresholdMultiplier &&
+                chunkEnergies[i] > minEnergyThreshold)
             {
                 float currentTime = (float)i * sampleChunkSize / (clip.frequency * channels);
 
