@@ -4,9 +4,9 @@ public class NoteController : MonoBehaviour
 {
     private Vector3 startPos;
     private Vector3 endPos;
-    private float targetHitTime;
+    public float targetHitTime;
     private float notePreSpawnTime;
-    private double songStartTime;
+    public double songStartTime;
 
     private RectTransform rectTransform;
     private bool isInitialized = false;
@@ -35,10 +35,7 @@ public class NoteController : MonoBehaviour
 
         // 2. 關鍵修正：Web 平台常出現 Scale 變成 0 的問題，強制重置為 1
         rectTransform.localScale = Vector3.one;
-
         isInitialized = true;
-
-        Debug.Log($"[Note Generated] LocalPos: {rectTransform.localPosition}, LocalScale: {rectTransform.localScale}, Parent: {transform.parent.name}");
     }
 
     void Update()
@@ -52,11 +49,5 @@ public class NoteController : MonoBehaviour
 
         // 使用純 UI 的本地座標插值移動
         rectTransform.localPosition = Vector3.Lerp(startPos, endPos, progress);
-
-        // 超過判定點銷毀
-        if (progress >= 1.2f)
-        {
-            Destroy(gameObject);
-        }
     }
 }

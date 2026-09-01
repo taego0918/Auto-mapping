@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using DG.Tweening;
 
 [System.Serializable]
 public class NoteData
@@ -17,6 +18,7 @@ public class AutoBeatmapGenerator : MonoBehaviour
     [Header("UI Reference")]
     public GameObject startPanel;        // 整個啟動選單面板
     public TextMeshProUGUI statusText;   // 顯示「載入中...」的文字
+    public TextMeshProUGUI trackStateText;
     public Button startButton;           // 「點擊開始」按鈕
     [Header("Audio Settings")]
     public AudioSource audioSource;
@@ -25,23 +27,62 @@ public class AutoBeatmapGenerator : MonoBehaviour
     [Tooltip("分析時每區塊的 Sample 數量 (須為 2 的次方)")]
     public int sampleChunkSize = 1024;
     [Tooltip("判定為音符的能量倍率門檻 (越高音符越少，越低音符越多)")]
-    public float thresholdMultiplier = 1.5f;
+    public float thresholdMultiplier = 5f;//1.5f;
     [Tooltip("兩個音符之間的最小時間間隔 (秒)，防止音符疊在一起")]
     public float minNoteInterval = 0.15f;
     [Tooltip("絕對音量保底門檻，低於此音量的靜音段落絕對不生成音符")]
     public float minEnergyThreshold = 0.05f; // [新增] 可在 Inspector 微調，預設可給 0.01 ~ 0.05
 
+    [Header("分數")]
+
+    public TextMeshProUGUI perfectCountText;
+    public TextMeshProUGUI greatCountText;
+    public TextMeshProUGUI badCountText;
+    public TextMeshProUGUI missCountText;
+
     [Header("Game Play Settings")]
     public GameObject notePrefab;       // 音符的 Prefab
     public Transform[] spawnPositions;  // 各軌道的生成點
     public Transform[] hitPositions;    // 各軌道的判定點 (終點)
-    public float noteSpeed = 10f;       // 音符移動速度
-    public float notePreSpawnTime = 2f; // 音符需要提前多久生成 (讓玩家反應)
+    float notePreSpawnTime = 5f; // 音符需要提前多久生成 (讓玩家反應)
 
-    private List<NoteData> beatmap = new List<NoteData>();
-    private int currentNoteIndex = 0;
-    private double songStartTime;
-    private bool isPlaying = false;
+    List<NoteData> beatmap = new List<NoteData>();
+    int currentNoteIndex = 0;
+    double songStartTime;
+    bool isPlaying = false;
+    // 假設每條軌道都有一個 List 存放「畫面上已經生成、但還沒被打擊」的音符物件
+    List<NoteController>[] activeNotesPerTrack = new List<NoteController>[4];
+    private Tween _delayTween;
+    // 定義判定時間區間 (秒)
+    float perfectWindow = 0.05f; // ±50ms
+    float greatWindow = 0.1f;   // ±100ms
+    float missWindow = 0.15f;    // ±150ms
+
+    int perfectCount = 0;
+    int greatCount = 0;
+    int badCount = 0;
+    int missCount = 0;
+
+    //_delay;
+
+    public static AutoBeatmapGenerator Instance { get; private set; }
+
+    private void Awake()
+    {
+        // 確保場景中只有一個 Instance
+        if (Instance != null && Instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
+        Instance = this;
+
+        // 為陣列中的每個軌道實例化 List
+        for (int i = 0; i < activeNotesPerTrack.Length; i++)
+        {
+            activeNotesPerTrack[i] = new List<NoteController>();
+        }
+    }
 
     void Start()
     {
@@ -212,8 +253,58 @@ public class AutoBeatmapGenerator : MonoBehaviour
                 }
             }
         }
-        Debug.Log($"[AutoBeatmap] 譜面分析完成！總共分析出 {beatmap.Count} 個音符。");
+        //Debug.Log($"[AutoBeatmap] 譜面分析完成！總共分析出 {beatmap.Count} 個音符。");
+        //Debug.Log($"time: {beatmap[0].time} ,index: {beatmap[0].trackIndex}");
     }
+
+    public void OnTrackPressed(int trackIndex)
+    {
+        //Debug.Log(activeNotesPerTrack[trackIndex]);
+        if (!isPlaying) return;
+        // 1. 如果該軌道畫面上完全沒有音符，代表亂按（空揮），直接跳過或算 Late/Miss
+        if (activeNotesPerTrack[trackIndex].Count == 0) return;
+        // 2. 取出該軌道最前端（最早生成）的音符
+        NoteController targetNote = activeNotesPerTrack[trackIndex][0];
+        double elapsedSongTime = AudioSettings.dspTime - songStartTime;
+        // 3. 計算按下時間與音符目標時間的絕對時間差
+        double currentDspTime = AudioSettings.dspTime;
+        double timeDiff = System.Math.Abs(elapsedSongTime - targetNote.targetHitTime);
+
+        // 4. 判定加減分
+        if (timeDiff <= perfectWindow)
+        {
+            //AddScore(1000); // Perfect!
+            RemoveNote(trackIndex, targetNote);
+            SetTrackStateText("Perfect", new Color(0f, 1f, 0f), trackIndex);
+        }
+        else if (timeDiff <= greatWindow)
+        {
+            //AddScore(700);  // Great!
+            RemoveNote(trackIndex, targetNote);
+            SetTrackStateText("Great", new Color(1f, 1f, 0f), trackIndex);
+        }
+        else if (timeDiff <= missWindow)
+        {
+            //AddScore(0);    // Bad / Miss
+            RemoveNote(trackIndex, targetNote);
+            SetTrackStateText("Bad", new Color(1f, 0f, 0f), trackIndex);
+        }
+        // 如果 timeDiff > missWindow，代表按太早了，可以選擇忽略不處理
+    }
+
+    // 放開按鍵/觸爆時呼叫
+    public void OnTrackReleased(int trackIndex)
+    {
+
+        // TODO: 這裡放 Hold 音符結束放開的判定邏輯
+    }
+
+    private void RemoveNote(int trackIndex, NoteController note)
+    {
+        activeNotesPerTrack[trackIndex].Remove(note);
+        Destroy(note.gameObject); // 或是改用 Object Pooling 回收
+    }
+
 
     void StartGame()
     {
@@ -235,6 +326,51 @@ public class AutoBeatmapGenerator : MonoBehaviour
             SpawnNote(beatmap[currentNoteIndex]);
             currentNoteIndex++;
         }
+
+        for (int i = 0; i < activeNotesPerTrack.Length; i++)
+        {
+            var noteList = activeNotesPerTrack[i];
+            // 從列表最後一個元素倒著往前檢查
+            if (noteList.Count > 0)
+            {
+                var item = noteList[0];
+                if (elapsedSongTime > item.targetHitTime + missWindow)
+                {
+                    RemoveNote(i, item);
+                    SetTrackStateText("Miss", new Color(1f, 0f, 0f), i);
+                }
+            }
+        }
+    }
+
+    void SetTrackStateText(string text, Color color, int index)
+    {
+        _delayTween?.Kill();
+        trackStateText.text = $"{text} {index}";
+        trackStateText.color = color;
+        _delayTween = DOVirtual.DelayedCall(1f, () =>
+        {
+            trackStateText.text = "";
+        });
+        switch (text)
+        {
+            case "Perfect":
+                perfectCount++;
+                perfectCountText.text = perfectCount.ToString();
+                break;
+            case "Great":
+                greatCount++;
+                greatCountText.text = greatCount.ToString();
+                break;
+            case "Bad":
+                badCount++;
+                badCountText.text = badCount.ToString();
+                break;
+            case "Miss":
+                missCount++;
+                missCountText.text = missCount.ToString();
+                break;
+        }
     }
 
     void SpawnNote(NoteData data)
@@ -247,13 +383,15 @@ public class AutoBeatmapGenerator : MonoBehaviour
 
         if (noteObj.TryGetComponent<NoteController>(out var noteController))
         {
+            float height = spawnPoint.GetComponent<RectTransform>().rect.height;
             noteController.Initialize(
                 spawnPoint.localPosition,
-                new Vector3(spawnPoint.localPosition.x, hitPoint.localPosition.y, spawnPoint.localPosition.z),
+                new Vector3(spawnPoint.localPosition.x, spawnPoint.localPosition.y - height, spawnPoint.localPosition.z),
                 data.time,
                 notePreSpawnTime,
                 songStartTime
             );
+            activeNotesPerTrack[track].Add(noteController);
         }
     }
 }

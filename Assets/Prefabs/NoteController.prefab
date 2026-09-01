@@ -37,7 +37,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
   m_AnchoredPosition: {x: 0, y: 0}
-  m_SizeDelta: {x: 100, y: 30}
+  m_SizeDelta: {x: 100, y: 20}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &2800491045754144482
 CanvasRenderer:
@@ -60,7 +60,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 1, g: 1, b: 1, a: 0.5882353}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -89,6 +89,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c06c00774adf34a559733af35569c8bc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::NoteController
+  targetHitTime: 0
 --- !u!114 &928997028349551932
 MonoBehaviour:
   m_ObjectHideFlags: 0
