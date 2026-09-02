@@ -25,13 +25,13 @@ public class AutoBeatmapGenerator : MonoBehaviour
 
     [Header("Generator Settings")]
     [Tooltip("分析時每區塊的 Sample 數量 (須為 2 的次方)")]
-    public int sampleChunkSize = 1024;
+    int sampleChunkSize = 1024;
     [Tooltip("判定為音符的能量倍率門檻 (越高音符越少，越低音符越多)")]
-    public float thresholdMultiplier = 5f;//1.5f;
+    float thresholdMultiplier = 1.5f;//1.5f;
     [Tooltip("兩個音符之間的最小時間間隔 (秒)，防止音符疊在一起")]
-    public float minNoteInterval = 0.15f;
+    float minNoteInterval = 0.15f;
     [Tooltip("絕對音量保底門檻，低於此音量的靜音段落絕對不生成音符")]
-    public float minEnergyThreshold = 0.05f; // [新增] 可在 Inspector 微調，預設可給 0.01 ~ 0.05
+    float minEnergyThreshold = 0.05f; // [新增] 可在 Inspector 微調，預設可給 0.01 ~ 0.05
 
     [Header("分數")]
 
@@ -44,6 +44,7 @@ public class AutoBeatmapGenerator : MonoBehaviour
     public GameObject notePrefab;       // 音符的 Prefab
     public Transform[] spawnPositions;  // 各軌道的生成點
     public Transform[] hitPositions;    // 各軌道的判定點 (終點)
+    public GameObject[] lightBars;
     float notePreSpawnTime = 5f; // 音符需要提前多久生成 (讓玩家反應)
 
     List<NoteData> beatmap = new List<NoteData>();
@@ -95,7 +96,7 @@ public class AutoBeatmapGenerator : MonoBehaviour
 
         if (statusText != null)
         {
-            statusText.text = "音檔讀取中...";
+            statusText.text = "Audio file loading...";
         }
 
         // 2. 開始非同步載入音檔與分析
@@ -259,37 +260,62 @@ public class AutoBeatmapGenerator : MonoBehaviour
 
     public void OnTrackPressed(int trackIndex)
     {
-        //Debug.Log(activeNotesPerTrack[trackIndex]);
+        lightBars[trackIndex].GetComponent<LightBar>().shoot();
         if (!isPlaying) return;
-        // 1. 如果該軌道畫面上完全沒有音符，代表亂按（空揮），直接跳過或算 Late/Miss
-        if (activeNotesPerTrack[trackIndex].Count == 0) return;
-        // 2. 取出該軌道最前端（最早生成）的音符
-        NoteController targetNote = activeNotesPerTrack[trackIndex][0];
-        double elapsedSongTime = AudioSettings.dspTime - songStartTime;
-        // 3. 計算按下時間與音符目標時間的絕對時間差
-        double currentDspTime = AudioSettings.dspTime;
-        double timeDiff = System.Math.Abs(elapsedSongTime - targetNote.targetHitTime);
 
-        // 4. 判定加減分
-        if (timeDiff <= perfectWindow)
+        var trackNotes = activeNotesPerTrack[trackIndex];
+        if (trackNotes.Count == 0) return;
+
+        double elapsedSongTime = AudioSettings.dspTime - songStartTime;
+
+        // 1. 尋找該軌道中距離當前時間點「最近」的音符
+        NoteController closestNote = null;
+        double minTimeDiff = double.MaxValue;
+
+        for (int i = 0; i < trackNotes.Count; i++)
         {
-            //AddScore(1000); // Perfect!
-            RemoveNote(trackIndex, targetNote);
-            SetTrackStateText("Perfect", new Color(0f, 1f, 0f), trackIndex);
+            double diff = System.Math.Abs(elapsedSongTime - trackNotes[i].targetHitTime);
+
+            if (diff < minTimeDiff)
+            {
+                minTimeDiff = diff;
+                closestNote = trackNotes[i];
+            }
+            else
+            {
+                break;
+            }
         }
-        else if (timeDiff <= greatWindow)
+
+        // 若沒找到合適音符或超出判定最大上限（代表玩家亂按空揮），直接返回
+        if (closestNote == null || minTimeDiff > missWindow + 1f) return;
+        string txt = "";
+        // 2. 進行分級判定
+        if (minTimeDiff <= perfectWindow)
         {
-            //AddScore(700);  // Great!
-            RemoveNote(trackIndex, targetNote);
-            SetTrackStateText("Great", new Color(1f, 1f, 0f), trackIndex);
+            // AddScore(1000);
+            txt = "Perfect";
         }
-        else if (timeDiff <= missWindow)
+        else if (minTimeDiff <= greatWindow)
         {
-            //AddScore(0);    // Bad / Miss
-            RemoveNote(trackIndex, targetNote);
-            SetTrackStateText("Bad", new Color(1f, 0f, 0f), trackIndex);
+            // AddScore(700);
+            txt = "Great";
         }
-        // 如果 timeDiff > missWindow，代表按太早了，可以選擇忽略不處理
+        else if (minTimeDiff <= missWindow)
+        {
+            // AddScore(0);
+            txt = "Bad";
+        }
+        else
+        {
+            txt = "Miss";
+        }
+
+        if (txt != "")
+        {
+            RemoveNote(trackIndex, closestNote);
+            SetTrackStateText(txt, trackIndex);
+        }
     }
 
     // 放開按鍵/觸爆時呼叫
@@ -337,17 +363,17 @@ public class AutoBeatmapGenerator : MonoBehaviour
                 if (elapsedSongTime > item.targetHitTime + missWindow)
                 {
                     RemoveNote(i, item);
-                    SetTrackStateText("Miss", new Color(1f, 0f, 0f), i);
+                    SetTrackStateText("Miss", i);
                 }
             }
         }
     }
 
-    void SetTrackStateText(string text, Color color, int index)
+    void SetTrackStateText(string text, int index)
     {
         _delayTween?.Kill();
-        trackStateText.text = $"{text} {index}";
-        trackStateText.color = color;
+        //trackStateText.text = $"{text} {index}";
+        trackStateText.text = $"{text}";
         _delayTween = DOVirtual.DelayedCall(1f, () =>
         {
             trackStateText.text = "";
@@ -357,18 +383,22 @@ public class AutoBeatmapGenerator : MonoBehaviour
             case "Perfect":
                 perfectCount++;
                 perfectCountText.text = perfectCount.ToString();
+                trackStateText.color = new Color(0f, 1f, 0f);
                 break;
             case "Great":
                 greatCount++;
                 greatCountText.text = greatCount.ToString();
+                trackStateText.color = new Color(1f, 1f, 0f);
                 break;
             case "Bad":
                 badCount++;
                 badCountText.text = badCount.ToString();
+                trackStateText.color = new Color(0f, 0f, 1f);
                 break;
             case "Miss":
                 missCount++;
                 missCountText.text = missCount.ToString();
+                trackStateText.color = new Color(1f, 0f, 0f);
                 break;
         }
     }
@@ -383,10 +413,13 @@ public class AutoBeatmapGenerator : MonoBehaviour
 
         if (noteObj.TryGetComponent<NoteController>(out var noteController))
         {
+            RectTransform rectTransform = hitPoint.GetComponent<RectTransform>();
+
+            float hitPosY = rectTransform.anchoredPosition.y;
             float height = spawnPoint.GetComponent<RectTransform>().rect.height;
             noteController.Initialize(
                 spawnPoint.localPosition,
-                new Vector3(spawnPoint.localPosition.x, spawnPoint.localPosition.y - height, spawnPoint.localPosition.z),
+                new Vector3(spawnPoint.localPosition.x, spawnPoint.localPosition.y - height + hitPosY, spawnPoint.localPosition.z),
                 data.time,
                 notePreSpawnTime,
                 songStartTime
