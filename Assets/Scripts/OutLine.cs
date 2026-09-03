@@ -9,6 +9,7 @@ public class OutLine : MonoBehaviour
 
     public enum OutlineStyle
     {
+        [InspectorName("1px (Underlay)")] px1,
         [InspectorName("2px (Underlay)")] px2,
         [InspectorName("4px (Underlay)")] px4,
     }
@@ -34,8 +35,11 @@ public class OutLine : MonoBehaviour
 
             switch (_currentStyle)
             {
-                case OutlineStyle.px2:
+                case OutlineStyle.px1:
                 default:
+                    underlayDilate = 1f;
+                    break;
+                case OutlineStyle.px2:
                     underlayDilate = 2f;
                     break;
                 case OutlineStyle.px4:

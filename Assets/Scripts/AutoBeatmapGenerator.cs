@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
-using DG.Tweening;
 
 [System.Serializable]
 public class NoteData
@@ -18,7 +17,6 @@ public class AutoBeatmapGenerator : MonoBehaviour
     [Header("UI Reference")]
     public GameObject startPanel;        // 整個啟動選單面板
     public TextMeshProUGUI statusText;   // 顯示「載入中...」的文字
-    public TextMeshProUGUI trackStateText;
     public Button startButton;           // 「點擊開始」按鈕
     [Header("Audio Settings")]
     public AudioSource audioSource;
@@ -33,36 +31,23 @@ public class AutoBeatmapGenerator : MonoBehaviour
     [Tooltip("絕對音量保底門檻，低於此音量的靜音段落絕對不生成音符")]
     float minEnergyThreshold = 0.05f; // [新增] 可在 Inspector 微調，預設可給 0.01 ~ 0.05
 
-    [Header("分數")]
-
-    public TextMeshProUGUI perfectCountText;
-    public TextMeshProUGUI greatCountText;
-    public TextMeshProUGUI badCountText;
-    public TextMeshProUGUI missCountText;
-
     [Header("Game Play Settings")]
     public GameObject notePrefab;       // 音符的 Prefab
     public Transform[] spawnPositions;  // 各軌道的生成點
     public Transform[] hitPositions;    // 各軌道的判定點 (終點)
     public GameObject[] lightBars;
+    [SerializeField] Proxy _proxy;
     float notePreSpawnTime = 5f; // 音符需要提前多久生成 (讓玩家反應)
 
     List<NoteData> beatmap = new List<NoteData>();
     int currentNoteIndex = 0;
     double songStartTime;
-    bool isPlaying = false;
     // 假設每條軌道都有一個 List 存放「畫面上已經生成、但還沒被打擊」的音符物件
     List<NoteController>[] activeNotesPerTrack = new List<NoteController>[4];
-    private Tween _delayTween;
     // 定義判定時間區間 (秒)
     float perfectWindow = 0.05f; // ±50ms
     float greatWindow = 0.1f;   // ±100ms
     float missWindow = 0.15f;    // ±150ms
-
-    int perfectCount = 0;
-    int greatCount = 0;
-    int badCount = 0;
-    int missCount = 0;
 
     //_delay;
 
@@ -87,6 +72,7 @@ public class AutoBeatmapGenerator : MonoBehaviour
 
     void Start()
     {
+        initData();
         // 1. 初始化 UI 狀態
         if (startButton != null)
         {
@@ -157,6 +143,16 @@ public class AutoBeatmapGenerator : MonoBehaviour
 
         // 正式啟動遊戲音樂與計時
         StartGame();
+    }
+
+    void initData()
+    {
+        _proxy.IsPlaying = false;
+        _proxy.PerfectCount = 0;
+        _proxy.GreatCount = 0;
+        _proxy.BadCount = 0;
+        _proxy.MissCount = 0;
+        _proxy.Energy = 40;
     }
 
     void GenerateBeatmap()
@@ -261,7 +257,7 @@ public class AutoBeatmapGenerator : MonoBehaviour
     public void OnTrackPressed(int trackIndex)
     {
         lightBars[trackIndex].GetComponent<LightBar>().shoot();
-        if (!isPlaying) return;
+        if (!_proxy.IsPlaying) return;
 
         var trackNotes = activeNotesPerTrack[trackIndex];
         if (trackNotes.Count == 0) return;
@@ -294,27 +290,25 @@ public class AutoBeatmapGenerator : MonoBehaviour
         if (minTimeDiff <= perfectWindow)
         {
             // AddScore(1000);
+            _proxy.PerfectCount++;
             txt = "Perfect";
         }
         else if (minTimeDiff <= greatWindow)
         {
             // AddScore(700);
+            _proxy.GreatCount++;
             txt = "Great";
         }
         else if (minTimeDiff <= missWindow)
         {
             // AddScore(0);
+            _proxy.BadCount++;
             txt = "Bad";
-        }
-        else
-        {
-            txt = "Miss";
         }
 
         if (txt != "")
         {
             RemoveNote(trackIndex, closestNote);
-            SetTrackStateText(txt, trackIndex);
         }
     }
 
@@ -337,12 +331,12 @@ public class AutoBeatmapGenerator : MonoBehaviour
         currentNoteIndex = 0;
         songStartTime = AudioSettings.dspTime + notePreSpawnTime;
         audioSource.PlayScheduled(songStartTime);
-        isPlaying = true;
+        _proxy.IsPlaying = true;
     }
 
     void Update()
     {
-        if (!isPlaying) return;
+        if (!_proxy.IsPlaying) return;
 
         double elapsedSongTime = AudioSettings.dspTime - songStartTime;
 
@@ -363,43 +357,9 @@ public class AutoBeatmapGenerator : MonoBehaviour
                 if (elapsedSongTime > item.targetHitTime + missWindow)
                 {
                     RemoveNote(i, item);
-                    SetTrackStateText("Miss", i);
+                    _proxy.MissCount++;
                 }
             }
-        }
-    }
-
-    void SetTrackStateText(string text, int index)
-    {
-        _delayTween?.Kill();
-        //trackStateText.text = $"{text} {index}";
-        trackStateText.text = $"{text}";
-        _delayTween = DOVirtual.DelayedCall(1f, () =>
-        {
-            trackStateText.text = "";
-        });
-        switch (text)
-        {
-            case "Perfect":
-                perfectCount++;
-                perfectCountText.text = perfectCount.ToString();
-                trackStateText.color = new Color(0f, 1f, 0f);
-                break;
-            case "Great":
-                greatCount++;
-                greatCountText.text = greatCount.ToString();
-                trackStateText.color = new Color(1f, 1f, 0f);
-                break;
-            case "Bad":
-                badCount++;
-                badCountText.text = badCount.ToString();
-                trackStateText.color = new Color(0f, 0f, 1f);
-                break;
-            case "Miss":
-                missCount++;
-                missCountText.text = missCount.ToString();
-                trackStateText.color = new Color(1f, 0f, 0f);
-                break;
         }
     }
 
