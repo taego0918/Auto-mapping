@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using TMPro;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -16,6 +17,7 @@ public class AutoBeatmapGenerator : MonoBehaviour
 {
     [Header("UI Reference")]
     public GameObject startPanel;        // 整個啟動選單面板
+    public GameObject spawnPositionsList;
     public TextMeshProUGUI statusText;   // 顯示「載入中...」的文字
     public Button startButton;           // 「點擊開始」按鈕
     [Header("Audio Settings")]
@@ -33,17 +35,18 @@ public class AutoBeatmapGenerator : MonoBehaviour
 
     [Header("Game Play Settings")]
     public GameObject notePrefab;       // 音符的 Prefab
-    public Transform[] spawnPositions;  // 各軌道的生成點
-    public Transform[] hitPositions;    // 各軌道的判定點 (終點)
-    public GameObject[] lightBars;
     [SerializeField] Proxy _proxy;
-    float notePreSpawnTime = 5f; // 音符需要提前多久生成 (讓玩家反應)
+    Transform[] spawnPositions;  // 各軌道的生成點
+    Transform[] hitPositions;    // 各軌道的判定點 (終點)
+    GameObject[] lightBars;
+
+    float notePreSpawnTime = 3f; // 音符需要提前多久生成 (讓玩家反應)
 
     List<NoteData> beatmap = new List<NoteData>();
     int currentNoteIndex = 0;
     double songStartTime;
     // 假設每條軌道都有一個 List 存放「畫面上已經生成、但還沒被打擊」的音符物件
-    List<NoteController>[] activeNotesPerTrack = new List<NoteController>[4];
+    List<NoteController>[] activeNotesPerTrack;
     // 定義判定時間區間 (秒)
     float perfectWindow = 0.05f; // ±50ms
     float greatWindow = 0.1f;   // ±100ms
@@ -62,16 +65,24 @@ public class AutoBeatmapGenerator : MonoBehaviour
             return;
         }
         Instance = this;
-
-        // 為陣列中的每個軌道實例化 List
-        for (int i = 0; i < activeNotesPerTrack.Length; i++)
-        {
-            activeNotesPerTrack[i] = new List<NoteController>();
-        }
     }
 
     void Start()
     {
+        int childCount = spawnPositionsList.transform.childCount;
+        // 為陣列中的每個軌道實例化 List
+        activeNotesPerTrack = new List<NoteController>[childCount];
+        spawnPositions = new Transform[childCount];
+        hitPositions = new Transform[childCount];
+        lightBars = new GameObject[childCount];
+        for (int i = 0; i < childCount; i++)
+        {
+            activeNotesPerTrack[i] = new List<NoteController>();
+            spawnPositions[i] = spawnPositionsList.transform.GetChild(i);
+            hitPositions[i] = spawnPositions[i].Find("hitPositions");
+            lightBars[i] = spawnPositions[i].Find("LightBar").gameObject;
+        }
+
         initData();
         // 1. 初始化 UI 狀態
         if (startButton != null)

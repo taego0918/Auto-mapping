@@ -18,21 +18,10 @@ public class TrackButton : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
     {
         if (keyAction != null)
         {
-            // 按下 A 鍵時觸發
+            // 按下指定鍵時觸發
             keyAction.started += OnKeyPressed;
-            // 放開 A 鍵時觸發
             keyAction.canceled += OnKeyReleased;
             keyAction.Enable();
-        }
-    }
-
-    private void OnDisable()
-    {
-        if (keyAction != null)
-        {
-            keyAction.started -= OnKeyPressed;
-            keyAction.canceled -= OnKeyReleased;
-            keyAction.Disable();
         }
     }
 
@@ -82,6 +71,15 @@ public class TrackButton : MonoBehaviour, IPointerDownHandler, IPointerUpHandler
         if (AutoBeatmapGenerator.Instance != null)
         {
             AutoBeatmapGenerator.Instance.OnTrackReleased(trackIndex);
+        }
+    }
+    private void OnDisable()
+    {
+        if (keyAction != null)
+        {
+            keyAction.started -= OnKeyPressed;
+            keyAction.canceled -= OnKeyReleased;
+            keyAction.Disable();
         }
     }
 }
