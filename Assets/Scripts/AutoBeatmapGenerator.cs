@@ -2,7 +2,6 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using TMPro;
-using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -16,10 +15,7 @@ public class NoteData
 public class AutoBeatmapGenerator : MonoBehaviour
 {
     [Header("UI Reference")]
-    public GameObject startPanel;        // 整個啟動選單面板
     public GameObject spawnPositionsList;
-    public TextMeshProUGUI statusText;   // 顯示「載入中...」的文字
-    public Button startButton;           // 「點擊開始」按鈕
     [Header("Audio Settings")]
     public AudioSource audioSource;
 
@@ -84,31 +80,13 @@ public class AutoBeatmapGenerator : MonoBehaviour
         }
 
         initData();
-        // 1. 初始化 UI 狀態
-        if (startButton != null)
-        {
-            startButton.gameObject.SetActive(false); // 先隱藏按鈕
-            startButton.onClick.AddListener(OnStartButtonClicked); // 綁定點擊事件
-        }
-
-        if (statusText != null)
-        {
-            statusText.text = "Audio file loading...";
-        }
-
-        // 2. 開始非同步載入音檔與分析
+        _proxy.OnIsPlayingChanged += OnStartButtonClicked;
         StartCoroutine(InitBeatmapRoutine());
     }
 
     IEnumerator InitBeatmapRoutine()
     {
         AudioClip clip = audioSource.clip;
-
-        if (clip == null)
-        {
-            if (statusText != null) statusText.text = "Error!!";
-            yield break;
-        }
 
         // 強制載入音檔數據
         clip.LoadAudioData();
@@ -118,40 +96,15 @@ public class AutoBeatmapGenerator : MonoBehaviour
         {
             yield return null;
         }
-
-        if (clip.loadState != AudioDataLoadState.Loaded)
-        {
-            if (statusText != null) statusText.text = "Error!";
-            yield break;
-        }
-
-        // 音檔 Ready，開始生成譜面
-        if (statusText != null) statusText.text = "Loading...";
         yield return null; // 讓畫面先刷新文字
 
         GenerateBeatmap();
-
-        // 3. 譜面分析完成，顯示開始按鈕！
-        if (statusText != null)
-        {
-            statusText.text = "";
-        }
-
-        if (startButton != null)
-        {
-            startButton.gameObject.SetActive(true); // 顯示「點擊開始遊戲」按鈕
-        }
+        _proxy.OnAudioReady?.Invoke();
     }
 
     // 玩家點擊按鈕時觸發
     void OnStartButtonClicked()
     {
-        // 隱藏整個 Panel
-        if (startPanel != null)
-        {
-            startPanel.SetActive(false);
-        }
-
         // 正式啟動遊戲音樂與計時
         StartGame();
     }
@@ -342,7 +295,6 @@ public class AutoBeatmapGenerator : MonoBehaviour
         currentNoteIndex = 0;
         songStartTime = AudioSettings.dspTime + notePreSpawnTime;
         audioSource.PlayScheduled(songStartTime);
-        _proxy.IsPlaying = true;
     }
 
     void Update()

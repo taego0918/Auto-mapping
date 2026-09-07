@@ -4,6 +4,7 @@ using System;
 public class Proxy : ScriptableObject
 {
     public event Action OnIsPlayingChanged;
+    public Action OnAudioReady;
     public event Action OnPerfectCountChanged;
     public event Action OnGreatCountChanged;
     public event Action OnBadCountChanged;

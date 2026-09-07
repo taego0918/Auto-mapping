@@ -33,7 +33,7 @@ public class EnergyBar : MonoBehaviour
         _delayTween?.Kill();
         float targetSize = _proxy.Energy / 100f;
 
-        _delayTween = DOVirtual.Float(_energyBar.size, targetSize, 0.5f, value =>
+        _delayTween = DOVirtual.Float(_energyBar.size, targetSize, 0.4f, value =>
         {
             _energyBar.size = value;
         })
