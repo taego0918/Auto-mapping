@@ -1,9 +1,6 @@
-using System;
 using System.Collections;
 using System.Collections.Generic;
-using TMPro;
 using UnityEngine;
-using UnityEngine.UI;
 
 [System.Serializable]
 public class NoteData
@@ -23,11 +20,11 @@ public class AutoBeatmapGenerator : MonoBehaviour
     [Tooltip("分析時每區塊的 Sample 數量 (須為 2 的次方)")]
     int sampleChunkSize = 1024;
     [Tooltip("判定為音符的能量倍率門檻 (越高音符越少，越低音符越多)")]
-    float thresholdMultiplier = 1.5f;//1.5f;
+    float thresholdMultiplier = 1.5f;
     [Tooltip("兩個音符之間的最小時間間隔 (秒)，防止音符疊在一起")]
     float minNoteInterval = 0.15f;
     [Tooltip("絕對音量保底門檻，低於此音量的靜音段落絕對不生成音符")]
-    float minEnergyThreshold = 0.05f; // [新增] 可在 Inspector 微調，預設可給 0.01 ~ 0.05
+    float minEnergyThreshold = 0.05f;
 
     [Header("Game Play Settings")]
     public GameObject notePrefab;       // 音符的 Prefab
@@ -41,20 +38,26 @@ public class AutoBeatmapGenerator : MonoBehaviour
     List<NoteData> beatmap = new List<NoteData>();
     int currentNoteIndex = 0;
     double songStartTime;
-    // 假設每條軌道都有一個 List 存放「畫面上已經生成、但還沒被打擊」的音符物件
+
+    // 存放「畫面上已經生成、但還沒被打擊」的音符物件
     List<NoteController>[] activeNotesPerTrack;
+
+    // ==================== [新增] 物件池相關變數 ====================
+    [Header("Object Pool Settings")]
+    [Tooltip("預先生成的音符池初始數量")]
+    [SerializeField] private int initialPoolSize = 20;
+    private Queue<NoteController> notePool = new Queue<NoteController>();
+    // ==============================================================
+
     // 定義判定時間區間 (秒)
     float perfectWindow = 0.05f; // ±50ms
     float greatWindow = 0.1f;   // ±100ms
     float missWindow = 0.15f;    // ±150ms
 
-    //_delay;
-
     public static AutoBeatmapGenerator Instance { get; private set; }
 
     private void Awake()
     {
-        // 確保場景中只有一個 Instance
         if (Instance != null && Instance != this)
         {
             Destroy(gameObject);
@@ -66,11 +69,11 @@ public class AutoBeatmapGenerator : MonoBehaviour
     void Start()
     {
         int childCount = spawnPositionsList.transform.childCount;
-        // 為陣列中的每個軌道實例化 List
         activeNotesPerTrack = new List<NoteController>[childCount];
         spawnPositions = new Transform[childCount];
         hitPositions = new Transform[childCount];
         lightBars = new GameObject[childCount];
+
         for (int i = 0; i < childCount; i++)
         {
             activeNotesPerTrack[i] = new List<NoteController>();
@@ -79,33 +82,75 @@ public class AutoBeatmapGenerator : MonoBehaviour
             lightBars[i] = spawnPositions[i].Find("LightBar").gameObject;
         }
 
+        // 初始化物件池
+        InitializePool();
+
         initData();
         _proxy.OnIsPlayingChanged += OnStartButtonClicked;
         StartCoroutine(InitBeatmapRoutine());
     }
 
+    // ==================== [新增] 物件池邏輯 ====================
+    private void InitializePool()
+    {
+        for (int i = 0; i < initialPoolSize; i++)
+        {
+            NoteController note = CreateNewNoteInstance();
+            note.gameObject.SetActive(false);
+            notePool.Enqueue(note);
+        }
+    }
+
+    private NoteController CreateNewNoteInstance()
+    {
+        GameObject noteObj = Instantiate(notePrefab, transform, false);
+        if (noteObj.TryGetComponent<NoteController>(out var noteController))
+        {
+            return noteController;
+        }
+        Debug.LogError("notePrefab 缺少 NoteController 組件！");
+        return null;
+    }
+
+    private NoteController GetNoteFromPool()
+    {
+        if (notePool.Count > 0)
+        {
+            NoteController note = notePool.Dequeue();
+            note.gameObject.SetActive(true);
+            return note;
+        }
+        else
+        {
+            // 池空了則動態擴充生成新的
+            return CreateNewNoteInstance();
+        }
+    }
+
+    private void ReturnNoteToPool(NoteController note)
+    {
+        note.gameObject.SetActive(false);
+        notePool.Enqueue(note);
+    }
+    // ==============================================================
+
     IEnumerator InitBeatmapRoutine()
     {
         AudioClip clip = audioSource.clip;
-
-        // 強制載入音檔數據
         clip.LoadAudioData();
 
-        // 等待解壓完成
         while (clip.loadState == AudioDataLoadState.Loading)
         {
             yield return null;
         }
-        yield return null; // 讓畫面先刷新文字
+        yield return null;
 
         GenerateBeatmap();
         _proxy.OnAudioReady?.Invoke();
     }
 
-    // 玩家點擊按鈕時觸發
     void OnStartButtonClicked()
     {
-        // 正式啟動遊戲音樂與計時
         StartGame();
     }
 
@@ -126,24 +171,19 @@ public class AutoBeatmapGenerator : MonoBehaviour
         float[] rawSamples = new float[clip.samples * channels];
 
         bool success = clip.GetData(rawSamples, 0);
-
         if (!success)
         {
             Debug.LogError("[AutoBeatmap] GetData 失敗！");
             return;
         }
 
-        // ==================== [新增] 低通濾波器 (Low-pass Filter) ====================
         float sampleRate = clip.frequency;
-
-        // 計算 RC 低通濾波器的衰減係數 (Alpha)
         float dt = 1f / sampleRate;
-        // 1. 低通濾波：切掉 250 Hz 以上 (去除人聲、吉他、高音)
+
         float lowPassCutoff = 250f;
         float lowPassRC = 1f / (2f * Mathf.PI * lowPassCutoff);
         float alphaLow = dt / (lowPassRC + dt);
 
-        // 2. 高通濾波：切掉 60 Hz 以下 (去除極低頻嗡嗡聲、Sub-bass 殘波)
         float highPassCutoff = 60f;
         float highPassRC = 1f / (2f * Mathf.PI * highPassCutoff);
         float alphaHigh = highPassRC / (highPassRC + dt);
@@ -156,11 +196,7 @@ public class AutoBeatmapGenerator : MonoBehaviour
         for (int i = 0; i < rawSamples.Length; i++)
         {
             float currentSample = rawSamples[i];
-
-            // 先過低通
             lastLowPass = lastLowPass + alphaLow * (currentSample - lastLowPass);
-
-            // 再過高通 (拿到最終乾淨的 60Hz~250Hz 重拍頻段)
             float currentHighPass = alphaHigh * (lastHighPass + lastLowPass - lastRawSample);
 
             lastRawSample = lastLowPass;
@@ -168,12 +204,10 @@ public class AutoBeatmapGenerator : MonoBehaviour
 
             filteredSamples[i] = currentHighPass;
         }
-        // ============================================================================
 
         int totalChunks = filteredSamples.Length / sampleChunkSize;
         float[] chunkEnergies = new float[totalChunks];
 
-        // 接下來全部改用濾波後的數據 (filteredSamples) 來計算能量
         for (int i = 0; i < totalChunks; i++)
         {
             float sum = 0;
@@ -197,7 +231,6 @@ public class AutoBeatmapGenerator : MonoBehaviour
             }
             localAverageEnergy /= (historyWindow * 2 + 1);
 
-            // [修改] 必須同時滿足：1. 倍率超過門檻  2. 絕對音量大於保底門檻
             if (chunkEnergies[i] > localAverageEnergy * thresholdMultiplier &&
                 chunkEnergies[i] > minEnergyThreshold)
             {
@@ -214,8 +247,6 @@ public class AutoBeatmapGenerator : MonoBehaviour
                 }
             }
         }
-        //Debug.Log($"[AutoBeatmap] 譜面分析完成！總共分析出 {beatmap.Count} 個音符。");
-        //Debug.Log($"time: {beatmap[0].time} ,index: {beatmap[0].trackIndex}");
     }
 
     public void OnTrackPressed(int trackIndex)
@@ -228,7 +259,6 @@ public class AutoBeatmapGenerator : MonoBehaviour
 
         double elapsedSongTime = AudioSettings.dspTime - songStartTime;
 
-        // 1. 尋找該軌道中距離當前時間點「最近」的音符
         NoteController closestNote = null;
         double minTimeDiff = double.MaxValue;
 
@@ -247,25 +277,21 @@ public class AutoBeatmapGenerator : MonoBehaviour
             }
         }
 
-        // 若沒找到合適音符或超出判定最大上限（代表玩家亂按空揮），直接返回
         if (closestNote == null || minTimeDiff > missWindow + 1f) return;
         string txt = "";
-        // 2. 進行分級判定
+
         if (minTimeDiff <= perfectWindow)
         {
-            // AddScore(1000);
             _proxy.PerfectCount++;
             txt = "Perfect";
         }
         else if (minTimeDiff <= greatWindow)
         {
-            // AddScore(700);
             _proxy.GreatCount++;
             txt = "Great";
         }
         else if (minTimeDiff <= missWindow)
         {
-            // AddScore(0);
             _proxy.BadCount++;
             txt = "Bad";
         }
@@ -276,19 +302,17 @@ public class AutoBeatmapGenerator : MonoBehaviour
         }
     }
 
-    // 放開按鍵/觸爆時呼叫
     public void OnTrackReleased(int trackIndex)
     {
-
-        // TODO: 這裡放 Hold 音符結束放開的判定邏輯
+        // TODO: Hold 音符邏輯
     }
 
+    // 修改：將原本 Destroy 的部分改為放入物件池回收
     private void RemoveNote(int trackIndex, NoteController note)
     {
         activeNotesPerTrack[trackIndex].Remove(note);
-        Destroy(note.gameObject); // 或是改用 Object Pooling 回收
+        ReturnNoteToPool(note);
     }
-
 
     void StartGame()
     {
@@ -313,7 +337,6 @@ public class AutoBeatmapGenerator : MonoBehaviour
         for (int i = 0; i < activeNotesPerTrack.Length; i++)
         {
             var noteList = activeNotesPerTrack[i];
-            // 從列表最後一個元素倒著往前檢查
             if (noteList.Count > 0)
             {
                 var item = noteList[0];
@@ -326,15 +349,16 @@ public class AutoBeatmapGenerator : MonoBehaviour
         }
     }
 
+    // 修改：改從物件池抓取 Note 進行初始化
     void SpawnNote(NoteData data)
     {
         int track = data.trackIndex;
         Transform spawnPoint = spawnPositions[track];
         Transform hitPoint = hitPositions[track];
 
-        GameObject noteObj = Instantiate(notePrefab, transform, false);
+        NoteController noteController = GetNoteFromPool();
 
-        if (noteObj.TryGetComponent<NoteController>(out var noteController))
+        if (noteController != null)
         {
             RectTransform rectTransform = hitPoint.GetComponent<RectTransform>();
 
@@ -345,7 +369,8 @@ public class AutoBeatmapGenerator : MonoBehaviour
                 new Vector3(spawnPoint.localPosition.x, spawnPoint.localPosition.y - height + hitPosY, spawnPoint.localPosition.z),
                 data.time,
                 notePreSpawnTime,
-                songStartTime
+                songStartTime,
+                track
             );
             activeNotesPerTrack[track].Add(noteController);
         }

@@ -12,16 +12,16 @@ public class tartPanel : MonoBehaviour
     {
         _proxy.OnIsPlayingChanged += OnIsPlayingChanged;
         _proxy.OnAudioReady += OnAudioReady;
+        startButton.onClick.AddListener(OnStartButtonClicked); // 綁定點擊事件
     }
 
     void OnStartButtonClicked()
     {
         _proxy.IsPlaying = true;
     }
+
     void OnAudioReady()
     {
-        //if (statusText != null) statusText.text = "Loading...";
-
         if (statusText != null) statusText.text = "";
         if (startButton != null) startButton.gameObject.SetActive(true); // 顯示「點擊開始遊戲」按鈕
     }
@@ -31,20 +31,11 @@ public class tartPanel : MonoBehaviour
         if (_proxy.IsPlaying)
         {
             // 隱藏整個 Panel
-            if (startPanel != null)
-            {
-                startPanel.SetActive(false);
-            }
+            if (startPanel != null) startPanel.SetActive(false);
         }
         else
         {
-            if (startButton != null)
-            {
-                startButton.gameObject.SetActive(false); // 先隱藏按鈕
-                startButton.onClick.RemoveListener(OnStartButtonClicked);
-                startButton.onClick.AddListener(OnStartButtonClicked); // 綁定點擊事件
-            }
-
+            if (startButton != null) startButton.gameObject.SetActive(false); // 先隱藏按鈕
             if (statusText != null) statusText.text = "Audio file loading...";
         }
     }

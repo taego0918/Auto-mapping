@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.UI;
 
 public class NoteController : MonoBehaviour
 {
@@ -14,7 +15,7 @@ public class NoteController : MonoBehaviour
     /// <summary>
     /// 初始化音符 (純 UI 座標版)
     /// </summary>
-    public void Initialize(Vector3 localStart, Vector3 localEnd, float targetHitTime, float preSpawnTime, double songStartTime)
+    public void Initialize(Vector3 localStart, Vector3 localEnd, float targetHitTime, float preSpawnTime, double songStartTime, int trackIndex)
     {
         this.targetHitTime = targetHitTime;
         this.notePreSpawnTime = preSpawnTime;
@@ -36,6 +37,29 @@ public class NoteController : MonoBehaviour
         // 2. 關鍵修正：Web 平台常出現 Scale 變成 0 的問題，強制重置為 1
         rectTransform.localScale = Vector3.one;
         isInitialized = true;
+        SetColor(trackIndex);
+    }
+
+    void SetColor(int index)
+    {
+        Color32 color;
+        switch (index)
+        {
+            case 0:
+            default:
+                color = new Color32(232, 168, 1, 255);
+                break;
+            case 1:
+                color = new Color32(64, 160, 200, 255);
+                break;
+            case 2:
+                color = new Color32(112, 240, 1, 255);
+                break;
+            case 3:
+                color = new Color32(248, 64, 160, 255);
+                break;
+        }
+        gameObject.GetComponent<Image>().color = color;
     }
 
     void Update()
