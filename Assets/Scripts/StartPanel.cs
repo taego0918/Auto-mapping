@@ -23,7 +23,9 @@ public class tartPanel : MonoBehaviour
     void OnAudioReady()
     {
         if (statusText != null) statusText.text = "";
-        if (startButton != null) startButton.gameObject.SetActive(true); // 顯示「點擊開始遊戲」按鈕
+        // 直接開始遊戲
+        OnStartButtonClicked();
+        //if (startButton != null) startButton.gameObject.SetActive(true); // 顯示「點擊開始遊戲」按鈕
     }
 
     void OnIsPlayingChanged()

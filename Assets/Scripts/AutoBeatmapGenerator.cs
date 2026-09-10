@@ -1,6 +1,8 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.AddressableAssets;
+using UnityEngine.ResourceManagement.AsyncOperations;
 
 [System.Serializable]
 public class NoteData
@@ -14,8 +16,8 @@ public class AutoBeatmapGenerator : MonoBehaviour
     [Header("UI Reference")]
     public GameObject spawnPositionsList;
     [Header("Audio Settings")]
-    public AudioSource audioSource;
-
+    public AudioSource bgmSource;
+    public AudioSource seSource;
     [Header("Generator Settings")]
     [Tooltip("分析時每區塊的 Sample 數量 (須為 2 的次方)")]
     int sampleChunkSize = 1024;
@@ -28,6 +30,9 @@ public class AutoBeatmapGenerator : MonoBehaviour
 
     [Header("Game Play Settings")]
     public GameObject notePrefab;       // 音符的 Prefab
+
+    public AudioClip clickSE;
+    public AudioClip missSE;
     [SerializeField] Proxy _proxy;
     Transform[] spawnPositions;  // 各軌道的生成點
     Transform[] hitPositions;    // 各軌道的判定點 (終點)
@@ -42,12 +47,14 @@ public class AutoBeatmapGenerator : MonoBehaviour
     // 存放「畫面上已經生成、但還沒被打擊」的音符物件
     List<NoteController>[] activeNotesPerTrack;
 
-    // ==================== [新增] 物件池相關變數 ====================
+    // ==================== 物件池相關變數 ====================
     [Header("Object Pool Settings")]
     [Tooltip("預先生成的音符池初始數量")]
     [SerializeField] private int initialPoolSize = 20;
     private Queue<NoteController> notePool = new Queue<NoteController>();
-    // ==============================================================
+
+    // ==================== Addressables 資源管理 Handle ====================
+    private AsyncOperationHandle<AudioClip> currentBgmHandle;
 
     // 定義判定時間區間 (秒)
     float perfectWindow = 0.05f; // ±50ms
@@ -87,10 +94,65 @@ public class AutoBeatmapGenerator : MonoBehaviour
 
         initData();
         _proxy.OnIsPlayingChanged += OnStartButtonClicked;
-        StartCoroutine(InitBeatmapRoutine());
+
+        // 如果 Inspector 填有預設 BGM 名稱，啟動時自動下載載入
+        if (!string.IsNullOrEmpty(_proxy.DefaultBgmAddress))
+        {
+            LoadBGMAndInit(_proxy.DefaultBgmAddress);
+        }
     }
 
-    // ==================== [新增] 物件池邏輯 ====================
+    public void LoadBGMAndInit(string bgmAddress)
+    {
+        // 載入新音檔前先釋放舊音檔
+        UnloadCurrentBGM();
+
+        Debug.Log($"[AutoBeatmap] 開始從 Addressables 載入 BGM: {bgmAddress}");
+
+        currentBgmHandle = Addressables.LoadAssetAsync<AudioClip>(bgmAddress);
+        currentBgmHandle.Completed += handle =>
+        {
+            if (handle.Status == AsyncOperationStatus.Succeeded)
+            {
+                Debug.Log($"[AutoBeatmap] BGM 載入成功: {bgmAddress}");
+                bgmSource.clip = handle.Result;
+                StartCoroutine(InitBeatmapRoutine());
+            }
+            else
+            {
+                Debug.LogError($"[AutoBeatmap] BGM 載入失敗: {bgmAddress}");
+            }
+        };
+    }
+
+    /// <summary>
+    /// 卸載當前載入的 BGM 資源以釋放記憶體
+    /// </summary>
+    public void UnloadCurrentBGM()
+    {
+        if (currentBgmHandle.IsValid())
+        {
+            if (bgmSource != null)
+            {
+                bgmSource.Stop();
+                bgmSource.clip = null;
+            }
+            Addressables.Release(currentBgmHandle);
+            Debug.Log("[AutoBeatmap] 已卸載舊的 BGM 資源");
+        }
+    }
+
+    public void PalySE(AudioClip audioClip)
+    {
+        seSource.PlayOneShot(audioClip);
+    }
+
+    private void OnDestroy()
+    {
+        UnloadCurrentBGM();
+    }
+
+    // ==================== 物件池邏輯 ====================
     private void InitializePool()
     {
         for (int i = 0; i < initialPoolSize; i++)
@@ -122,7 +184,6 @@ public class AutoBeatmapGenerator : MonoBehaviour
         }
         else
         {
-            // 池空了則動態擴充生成新的
             return CreateNewNoteInstance();
         }
     }
@@ -132,11 +193,16 @@ public class AutoBeatmapGenerator : MonoBehaviour
         note.gameObject.SetActive(false);
         notePool.Enqueue(note);
     }
-    // ==============================================================
 
     IEnumerator InitBeatmapRoutine()
     {
-        AudioClip clip = audioSource.clip;
+        if (bgmSource.clip == null)
+        {
+            Debug.LogError("[AutoBeatmap] 無法生成譜面，AudioSource 的 clip 為空！");
+            yield break;
+        }
+
+        AudioClip clip = bgmSource.clip;
         clip.LoadAudioData();
 
         while (clip.loadState == AudioDataLoadState.Loading)
@@ -166,7 +232,8 @@ public class AutoBeatmapGenerator : MonoBehaviour
 
     void GenerateBeatmap()
     {
-        AudioClip clip = audioSource.clip;
+        beatmap.Clear();
+        AudioClip clip = bgmSource.clip;
         int channels = clip.channels;
         float[] rawSamples = new float[clip.samples * channels];
 
@@ -253,7 +320,7 @@ public class AutoBeatmapGenerator : MonoBehaviour
     {
         lightBars[trackIndex].GetComponent<LightBar>().shoot();
         if (!_proxy.IsPlaying) return;
-
+        PalySE(clickSE);
         var trackNotes = activeNotesPerTrack[trackIndex];
         if (trackNotes.Count == 0) return;
 
@@ -304,10 +371,9 @@ public class AutoBeatmapGenerator : MonoBehaviour
 
     public void OnTrackReleased(int trackIndex)
     {
-        // TODO: Hold 音符邏輯
+        // HOLD 音符邏輯預留
     }
 
-    // 修改：將原本 Destroy 的部分改為放入物件池回收
     private void RemoveNote(int trackIndex, NoteController note)
     {
         activeNotesPerTrack[trackIndex].Remove(note);
@@ -318,7 +384,7 @@ public class AutoBeatmapGenerator : MonoBehaviour
     {
         currentNoteIndex = 0;
         songStartTime = AudioSettings.dspTime + notePreSpawnTime;
-        audioSource.PlayScheduled(songStartTime);
+        bgmSource.PlayScheduled(songStartTime);
     }
 
     void Update()
@@ -344,12 +410,12 @@ public class AutoBeatmapGenerator : MonoBehaviour
                 {
                     RemoveNote(i, item);
                     _proxy.MissCount++;
+                    PalySE(missSE);
                 }
             }
         }
     }
 
-    // 修改：改從物件池抓取 Note 進行初始化
     void SpawnNote(NoteData data)
     {
         int track = data.trackIndex;

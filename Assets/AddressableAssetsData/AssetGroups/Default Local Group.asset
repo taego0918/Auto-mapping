@@ -1,0 +1,93 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbb281ee3bf0b054c82ac2347e9e782c, type: 3}
+  m_Name: Default Local Group
+  m_EditorClassIdentifier: Unity.Addressables.Editor::UnityEditor.AddressableAssets.Settings.AddressableAssetGroup
+  m_GroupName: Default Local Group
+  m_GUID: 98a9a27ea087a42408a8def90720ec9d
+  m_SerializeEntries:
+  - m_GUID: 2066bf2b8922841b69a4cee4e9800a1f
+    m_Address: Assets/Img/letter-j.png
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2bd8ed459d92d4dd8b9cbdf9fc9c11e0
+    m_Address: Assets/Prefabs/Scoreboard.prefab
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 583ec1e618b644df582b1f0e154f4cb3
+    m_Address: Assets/Prefabs/AutoBeatmapGenerator.prefab
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 5d3e7dfaf92f940d18978c28b25a6c33
+    m_Address: Assets/Img/letter-a.png
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6432d1756760144208042a281939a881
+    m_Address: Assets/Prefabs/LightBar.prefab
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 65cc6c00bdc3d47d29d898d8aa5afb3e
+    m_Address: Initial d Deja vu
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7264956e52e8d4820af952799ad184bb
+    m_Address: Assets/Img/letter-k.png
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 77a2d21d09b9b490985337a1a1c49b64
+    m_Address: Assets/Prefabs/startPanel.prefab
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 93c44c330a5e34364894c13d278f2e23
+    m_Address: Assets/Img/letter-d.png
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b199e176eba404cc6a00ccd0b55529d4
+    m_Address: Assets/Img/letter-s.png
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c4dd9011ff4904d68bdbdcc86de51359
+    m_Address: Assets/Prefabs/NoteController.prefab
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: c934aac92b0c14366ba7129808528cf5
+    m_Address: Assets/Prefabs/EnergyBar.prefab
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ca1822a35ce844e929cd321efafd8cac
+    m_Address: Assets/Prefabs/TrackStateBar.prefab
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: ec7e3233e98ce46b4aabee2b84ffd643
+    m_Address: Assets/Img/letter-f.png
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  m_ReadOnly: 0
+  m_Settings: {fileID: 11400000, guid: cdfdc7f1736eb45d783eabd276eb018d, type: 2}
+  m_SchemaSet:
+    m_Schemas:
+    - {fileID: 11400000, guid: 59243ae8a09d6401c8dcd6f826489543, type: 2}
+    - {fileID: 11400000, guid: 5e188a412b8f84abea0e2a406d08f21e, type: 2}

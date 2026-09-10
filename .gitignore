@@ -8,6 +8,10 @@
 /[Uu]ser[Ss]ettings/
 /[Mm]emoryCaptures/
 
+/Assets/AddressableAssetsData/*/*.bin
+/Assets/AddressableAssetsData/*/*.json
+/Assets/AddressableAssetsData/AddressableAssetSettings.AssetInspector.pref
+
 # IDE 自動產生的專案檔 (Visual Studio / Rider / VS Code)
 /.vs/
 /.idea/

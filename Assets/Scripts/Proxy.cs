@@ -16,6 +16,8 @@ public class Proxy : ScriptableObject
     int _missCount = 0;
     int _energy = 40;
 
+    string _defaultBgmAddress = "The Chainsmokers"; //Haruhikage
+
     bool _isPlaying = false;
 
     public bool IsPlaying
@@ -87,6 +89,15 @@ public class Proxy : ScriptableObject
             Energy -= 2;
             _missCount = value;
             OnMissCountChanged?.Invoke();
+        }
+    }
+
+    public string DefaultBgmAddress
+    {
+        get { return _defaultBgmAddress; }
+        set
+        {
+            _defaultBgmAddress = value;
         }
     }
 }
